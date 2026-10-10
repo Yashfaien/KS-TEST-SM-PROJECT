@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K–S Test - Game Loot RNG Audit</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #22c55e;
+      --primary-hover: #16a34a;
+      --input-bg: #0f172a;
+      --table-header: #0f172a;
+      --table-border: #334155;
+    }
+
+    body {
+      font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 25px 15px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #4ade80;
+      margin-bottom: 5px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .dist-note {
+      background: rgba(34, 197, 94, 0.1);
+      border-left: 4px solid var(--primary);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 20px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+    }
+
+    .mode-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 10px;
+      background: #334155;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      color: #94a3b8;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .mode-btn.active {
+      background: var(--primary);
+      color: #0f172a;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border: 1px solid var(--card-border);
+      background: var(--input-bg);
+      color: var(--text);
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    button.run-btn {
+      margin-top: 20px;
+      padding: 12px 20px;
+      background: var(--primary);
+      color: #0f172a;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    button.run-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    button.csv-btn {
+      margin-top: 15px;
+      padding: 10px 16px;
+      background: #38bdf8;
+      color: #0f172a;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    button.csv-btn:hover {
+      background: #0284c7;
+      color: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid var(--table-border);
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    th {
+      background: var(--table-header);
+      color: #4ade80;
+      font-weight: 600;
+    }
+
+    td {
+      background: var(--card-bg);
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 15px;
+      text-align: center;
+      font-weight: bold;
+      line-height: 1.5;
+    }
+
+    .pass {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid #22c55e;
+    }
+
+    .fail {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid #ef4444;
+    }
+
+    .rare-tag { color: #f59e0b; font-weight: bold; }
+    .common-tag { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <h1>Kolmogorov–Smirnov Test</h1>
+  <div class="subtitle">Video Game Loot Drop RNG Uniformity Audit</div>
+
+  <div class="container">
+    <div class="dist-note">
+      <strong>Probability Distribution:</strong> Continuous Uniform Distribution U[0,1] with PDF f(x) = 1 for 0 ≤ x ≤ 1.
+    </div>
+
+    <div class="mode-selector">
+      <button type="button" class="mode-btn active" id="btnLcg" onclick="setMode('lcg')">Generate via LCG (Random)</button>
+      <button type="button" class="mode-btn" id="btnCustom" onclick="setMode('custom')">Custom Sequence Input</button>
+    </div>
+
+    <!-- LCG Generator Section -->
+    <div id="lcgSection">
+      <div class="grid-4">
+        <div>
+          <label for="multiplier">Multiplier (a):</label>
+          <input type="number" id="multiplier" value="5" />
+        </div>
+        <div>
+          <label for="increment">Increment (c):</label>
+          <input type="number" id="increment" value="3" />
+        </div>
+        <div>
+          <label for="modulus">Modulus (m):</label>
+          <input type="number" id="modulus" value="16" />
+        </div>
+        <div>
+          <label for="seed">Seed (X₀):</label>
+          <input type="number" id="seed" value="7" />
+        </div>
+      </div>
+      <label for="sampleN">Total Random Numbers to Generate (N):</label>
+      <input type="number" id="sampleN" value="10" min="1" max="100" />
+    </div>
+
+    <!-- Custom Sequence Section -->
+    <div id="customSection" style="display: none;">
+      <label for="rolls">Enter Sequence (Rᵢ values between 0 and 1):</label>
+      <input type="text" id="rolls" value="0.082, 0.451, 0.034, 0.892, 0.125, 0.671, 0.048, 0.523, 0.231, 0.784" />
+    </div>
+
+    <div style="margin-top: 10px;">
+      <label for="alphaSelect">Significance Level (α):</label>
+      <select id="alphaSelect">
+        <option value="0.05" selected>α = 0.05</option>
+        <option value="0.10">α = 0.10</option>
+        <option value="0.01">α = 0.01</option>
+      </select>
+    </div>
+
+    <button class="run-btn" onclick="runTest()">Run K–S Uniformity Audit</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    let currentMode = 'lcg';
+    let currentTableData = [];
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('btnLcg').classList.toggle('active', mode === 'lcg');
+      document.getElementById('btnCustom').classList.toggle('active', mode === 'custom');
+      document.getElementById('lcgSection').style.display = mode === 'lcg' ? 'block' : 'none';
+      document.getElementById('customSection').style.display = mode === 'custom' ? 'block' : 'none';
+    }
+
+    function getCriticalValueTableA8(N, alpha) {
+      const tableA8 = {
+        0.05: {
+          1: 0.975, 2: 0.842, 3: 0.708, 4: 0.624, 5: 0.565,
+          6: 0.521, 7: 0.486, 8: 0.457, 9: 0.432, 10: 0.410,
+          11: 0.391, 12: 0.375, 13: 0.361, 14: 0.349, 15: 0.338,
+          16: 0.328, 17: 0.318, 18: 0.309, 19: 0.301, 20: 0.294,
+          25: 0.270, 30: 0.240, 35: 0.230
+        },
+        0.10: {
+          1: 0.950, 2: 0.776, 3: 0.642, 4: 0.564, 5: 0.510,
+          6: 0.470, 7: 0.438, 8: 0.411, 9: 0.388, 10: 0.368,
+          11: 0.352, 12: 0.338, 13: 0.325, 14: 0.314, 15: 0.304,
+          16: 0.295, 17: 0.286, 18: 0.278, 19: 0.272, 20: 0.264,
+          25: 0.240, 30: 0.220, 35: 0.210
+        },
+        0.01: {
+          1: 0.995, 2: 0.929, 3: 0.828, 4: 0.733, 5: 0.669,
+          6: 0.618, 7: 0.577, 8: 0.543, 9: 0.514, 10: 0.490,
+          11: 0.468, 12: 0.450, 13: 0.433, 14: 0.418, 15: 0.404,
+          16: 0.392, 17: 0.381, 18: 0.371, 19: 0.363, 20: 0.356,
+          25: 0.320, 30: 0.290, 35: 0.270
+        }
+      };
+
+      if (tableA8[alpha] && tableA8[alpha][N]) {
+        return tableA8[alpha][N];
+      }
+
+      if (alpha === 0.05) return 1.36 / Math.sqrt(N);
+      if (alpha === 0.10) return 1.22 / Math.sqrt(N);
+      if (alpha === 0.01) return 1.63 / Math.sqrt(N);
+      return 1.36 / Math.sqrt(N);
+    }
+
+    function runTest() {
+      let Ri = [];
+      const alpha = parseFloat(document.getElementById("alphaSelect").value);
+
+      if (currentMode === 'lcg') {
+        const a = parseInt(document.getElementById("multiplier").value);
+        const c = parseInt(document.getElementById("increment").value);
+        const m = parseInt(document.getElementById("modulus").value);
+        let X = parseInt(document.getElementById("seed").value);
+        const N = parseInt(document.getElementById("sampleN").value);
+
+        for (let i = 0; i < N; i++) {
+          X = (a * X + c) % m;
+          Ri.push(X / m);
+        }
+      } else {
+        const inputText = document.getElementById("rolls").value;
+        Ri = inputText.split(",").map(val => parseFloat(val.trim())).filter(val => !isNaN(val));
+      }
+
+      const N = Ri.length;
+      if (N === 0) {
+        alert("Please enter or generate valid random numbers.");
+        return;
+      }
+
+      const D_alpha = getCriticalValueTableA8(N, alpha);
+
+      let sortedRi = [...Ri].sort((a, b) => a - b);
+
+      let Dplus = [];
+      let Dminus = [];
+      currentTableData = [];
+
+      for (let i = 0; i < N; i++) {
+        const rank = i + 1;
+        const R_i = sortedRi[i];
+        const i_over_N = rank / N;
+        const d_plus = i_over_N - R_i;
+        const d_minus = R_i - (i / N);
+
+        Dplus.push(d_plus);
+        Dminus.push(d_minus);
+
+        const isRare = R_i < 0.10;
+
+        currentTableData.push({
+          i: rank,
+          R_i: R_i,
+          i_over_N: i_over_N,
+          Dplus: d_plus,
+          Dminus: d_minus,
+          category: isRare ? 'Rare Item' : 'Common Item'
+        });
+      }
+
+      let DplusMax = Math.max(...Dplus);
+      let DminusMax = Math.max(...Dminus);
+      let D = Math.max(DplusMax, DminusMax);
+
+     let isAccepted = D <= D_alpha;
+let resultText = isAccepted
+  ? `<div class="result pass">
+       ✅ <strong>D = ${D.toFixed(4)} ≤ D_α = ${D_alpha.toFixed(4)}</strong> (N=${N}, α=${alpha})<br>
+       <strong>Audit Verdict:</strong> We <strong>fail to reject H₀</strong>. The roll sequence follows a Continuous Uniform Distribution U[0,1].<br>
+       <span style="font-size: 13px; font-weight: normal; color: #a7f3d0; margin-top: 5px; display: block;">
+         🎮 <strong>Conclusion:</strong> The game's loot box RNG drop engine is <strong>fair, unbiased, and compliant</strong> with published drop probabilities.
+       </span>
+     </div>`
+  : `<div class="result fail">
+       ❌ <strong>D = ${D.toFixed(4)} > D_α = ${D_alpha.toFixed(4)}</strong> (N=${N}, α=${alpha})<br>
+       <strong>Audit Verdict:</strong> We <strong>reject H₀</strong>. The roll sequence deviates significantly from a Continuous Uniform Distribution U[0,1].<br>
+       <span style="font-size: 13px; font-weight: normal; color: #fca5a5; margin-top: 5px; display: block;">
+         ⚠️ <strong>Conclusion:</strong> The game's loot box RNG drop engine is <strong>biased or rigged</strong> and fails the uniformity audit.
+       </span>
+     </div>`;
+
+      let tableHTML = `
+      <h3>Tabular Computation Breakdown</h3>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>i</th>
+              <th>Roll R₍ᵢ₎ (Sorted)</th>
+              <th>i / N</th>
+              <th>D⁺ = (i/N) - R₍ᵢ₎</th>
+              <th>D⁻ = R₍ᵢ₎ - (i-1)/N</th>
+              <th>Item Category (10% Rare Threshold)</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+      for (let row of currentTableData) {
+        const isRare = row.category === 'Rare Item';
+        tableHTML += `
+          <tr>
+            <td>${row.i}</td>
+            <td>${row.R_i.toFixed(4)}</td>
+            <td>${row.i_over_N.toFixed(4)}</td>
+            <td>${row.Dplus.toFixed(4)}</td>
+            <td>${row.Dminus.toFixed(4)}</td>
+            <td>${isRare ? '<span class="rare-tag">🔥 RARE ITEM</span>' : '<span class="common-tag">Common Item</span>'}</td>
+          </tr>`;
+      }
+
+      tableHTML += `</tbody></table></div>`;
+
+      document.getElementById("output").innerHTML = `
+        ${tableHTML}
+        <div style="text-align: center;">
+          <button class="csv-btn" onclick="downloadCSV()">📥 Download Table as CSV</button>
+        </div>
+        <div style="margin-top:15px; text-align:center; font-size:14px; color:#cbd5e1;">
+          <strong>D⁺ = ${DplusMax.toFixed(4)}</strong> &nbsp;|&nbsp; 
+          <strong>D⁻ = ${DminusMax.toFixed(4)}</strong> &nbsp;|&nbsp; 
+          <strong>D = ${D.toFixed(4)}</strong> &nbsp;|&nbsp;
+          <strong>Critical Value D_α = ${D_alpha.toFixed(4)}</strong>
+        </div>
+        ${resultText}
+      `;
+    }
+
+    function downloadCSV() {
+      if (currentTableData.length === 0) return;
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "i,Roll_R_i_Sorted,i_over_N,D_plus,D_minus,Item_Category\n";
+
+      currentTableData.forEach(row => {
+        csvContent += `${row.i},${row.R_i.toFixed(4)},${row.i_over_N.toFixed(4)},${row.Dplus.toFixed(4)},${row.Dminus.toFixed(4)},${row.category}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "KS_Test_Loot_RNG_Audit.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+
+  <footer style="margin-top: 30px; text-align: center; color: #94a3b8; font-size: 13px;">
+    <hr style="border: 0; border-top: 1px solid #334155; width: 80%;">
+    <p><strong>Muhammad Yashfaien Memon</strong> (22SW043)</p>
+    <p>Subject: Simulation & Modeling</p>
+  </footer>
+
+</body>
+</html>
